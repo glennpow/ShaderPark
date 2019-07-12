@@ -1,33 +1,36 @@
+// Upgrade NOTE: replaced '_Object2World' with 'unity_ObjectToWorld'
+
 Shader "Custom/Grass"
 {
     Properties
     {
 		[Header(Ground)]
     	_Splat0 ("Ground Texture", 2D) = "white" {}
+    	_RandomBaseOffset ("RandomBaseOffset", Range(0, 1)) = 0
 
 		[Header(Shading)]
-        _TopColor("Top Color", Color) = (1,1,1,1)
-		_BottomColor("Bottom Color", Color) = (1,1,1,1)
-		_TranslucentGain("Translucent Gain", Range(0,1)) = 0.5
+        _TopColor ("Top Color", Color) = (1, 1, 1, 1)
+		_BottomColor ("Bottom Color", Color) = (1, 1, 1, 1)
+		_TranslucentGain ("Translucent Gain", Range(0, 1)) = 0.5
 
 		[Header(Shape)]
-		_BladeWidth("Blade Width", Float) = 0.05
-		_BladeWidthRandom("Blade Width Random", Float) = 0.02
-		_BladeHeight("Blade Height", Float) = 0.5
-		_BladeHeightRandom("Blade Height Random", Float) = 0.3
-		_BladeForward("Blade Forward Amount", Float) = 0.38
-		_BladeCurve("Blade Curvature Amount", Range(1, 4)) = 2
-		_BendRotationRandom("Bend Rotation Random", Range(0, 1)) = 0.2
+		_BladeWidth ("Blade Width", Float) = 0.05
+		_BladeWidthRandom ("Blade Width Random", Float) = 0.02
+		_BladeHeight ("Blade Height", Float) = 0.5
+		_BladeHeightRandom ("Blade Height Random", Float) = 0.3
+		_BladeForward ("Blade Forward Amount", Float) = 0.38
+		_BladeCurve ("Blade Curvature Amount", Range(1, 4)) = 2
+		_BendRotationRandom ("Bend Rotation Random", Range(0, 1)) = 0.2
 
 		[Header(Tessellation)]
-		_TessellationUniform("Tessellation Uniform", Range(1, 64)) = 1
+		_TessellationUniform ("Tessellation Uniform", Range(1, 64)) = 1
 		_TessellationMinDistance ("Tessellation Min Distance", Float) = 10
 		_TessellationMaxDistance ("Tessellation Max Distance", Float) = 25
 
 		[Header(Wind)]
-		_WindDistortionMap("Wind Distortion Map", 2D) = "white" {}
-		_WindFrequency("Wind Frequency", Vector) = (0.05, 0.05, 0, 0)
-		_WindStrength("Wind Strength", Float) = 1
+		_WindDistortionMap ("Wind Distortion Map", 2D) = "white" {}
+		_WindFrequency ("Wind Frequency", Vector) = (0.05, 0.05, 0, 0)
+		_WindStrength ("Wind Strength", Float) = 1
     }
 
 	CGINCLUDE
@@ -39,6 +42,8 @@ Shader "Custom/Grass"
 	#define BLADE_SEGMENTS 3
 
 	// property accessors
+    sampler2D _Splat0;
+	float _RandomBaseOffset;
 	float _TranslucentGain;
 	float _BladeHeight;
 	float _BladeHeightRandom;	
@@ -76,10 +81,10 @@ Shader "Custom/Grass"
 		float4 tangent : TANGENT;
 	};
 
-	geometryOutput VertexOutput(float3 pos, float2 uv, float3 normal)
+	geometryOutput VertexOutput(float3 pos, float3 posOffset, float2 uv, float3 normal)
 	{
 		geometryOutput o;
-		o.pos = UnityObjectToClipPos(pos);
+		o.pos = UnityObjectToClipPos(pos) + float4(posOffset, 0);
 		o.uv = uv;
 		o.normal = UnityObjectToWorldNormal(normal);
 		o._ShadowCoord = ComputeScreenPos(o.pos);
@@ -90,13 +95,18 @@ Shader "Custom/Grass"
 		return o;
 	}
 
-	geometryOutput GenerateGrassVertex(float3 vertexPosition, float width, float height, float forward, float2 uv, float3x3 transformMatrix)
+	geometryOutput VertexObjectOutput(vertexOutput IN)
+	{
+		return VertexOutput(IN.vertex, float3(0, 0, 0), IN.uv, IN.normal);
+	}
+
+	geometryOutput GenerateGrassVertex(float3 vertexPosition, float3 posOffset, float width, float height, float forward, float2 uv, float3x3 transformMatrix)
 	{
 		float3 tangentPoint = float3(width, forward, height);
 		float3 tangentNormal = normalize(float3(0, -1, forward));
 		float3 localNormal = mul(transformMatrix, tangentNormal);
 		float3 localPosition = vertexPosition + mul(transformMatrix, tangentPoint);
-		return VertexOutput(localPosition, uv, localNormal);
+		return VertexOutput(localPosition, posOffset, uv, localNormal);
 	}
 
 	vertexOutput vert(vertexInput v)
@@ -107,6 +117,7 @@ Shader "Custom/Grass"
 		o.normal = v.normal;
 		o.tangent = v.tangent;
 
+		// TODO - needed/desired?
 //        half3 worldNormal = UnityObjectToWorldNormal(v.normal);
 //        half nl = max(0, dot(worldNormal, _WorldSpaceLightPos0.xyz));
 //        o.diff = nl * _LightColor0.rgb;
@@ -136,11 +147,20 @@ Shader "Custom/Grass"
 			vTangent.z, vBinormal.z, vNormal.z
 		);
 
-		// random facing transformation matrix
-		float3x3 facingRotationMatrix = AngleAxis3x3(rand(pos) * UNITY_TWO_PI, float3(0, 0, 1));
+		// shared random factors
+		float3 randomFactors = float3(rand(pos), rand(pos.yzx), rand(pos.zxy));
 
-		// bending transformation matrix
-		float3x3 bendRotationMatrix = AngleAxis3x3(rand(pos.zzx) * _BendRotationRandom * UNITY_PI * 0.5, float3(-1, 0, 0));
+		// random base offset
+		float posOffset = float3(0, 0, 0);
+		float3 offset1 = lerp(pos, IN[1].vertex, saturate(randomFactors.x) * _RandomBaseOffset);
+		float3 offset2 = lerp(pos, IN[2].vertex, saturate(randomFactors.y) * _RandomBaseOffset);
+		pos = lerp(offset1, offset2, saturate(randomFactors.z) * _RandomBaseOffset);
+
+		// random facing transformation matrix  rand(pos)
+		float3x3 facingRotationMatrix = AngleAxis3x3(randomFactors.x * UNITY_TWO_PI, float3(0, 0, 1));
+
+		// bending transformation matrix  rand(pos.zzx)
+		float3x3 bendRotationMatrix = AngleAxis3x3(randomFactors.x * _BendRotationRandom * UNITY_PI * 0.5, float3(-1, 0, 0));
 
 		// wind
 		float2 uv = pos.xz * _WindDistortionMap_ST.xy + _WindDistortionMap_ST.zw + _WindFrequency * _Time.y;
@@ -152,10 +172,10 @@ Shader "Custom/Grass"
 		float3x3 transformationMatrix = mul(mul(mul(tangentToLocal, windRotation), facingRotationMatrix), bendRotationMatrix);
 		float3x3 transformationMatrixFacing = mul(tangentToLocal, facingRotationMatrix);
 
-		// build blade of grass in tangent-space
-		float height = (rand(pos.zyx) * 2 - 1) * _BladeHeightRandom + _BladeHeight;
-		float width = (rand(pos.xzy) * 2 - 1) * _BladeWidthRandom + _BladeWidth;
-		float forward = rand(pos.yyz) * _BladeForward;
+		// build blade of grass in tangent-space  rand(pos.zyx), rand(pos.xzy), rand(pos.yyz)
+		float height = (randomFactors.x * 2 - 1) * _BladeHeightRandom + _BladeHeight;
+		float width = (randomFactors.y * 2 - 1) * _BladeWidthRandom + _BladeWidth;
+		float forward = randomFactors.z * _BladeForward;
 		for (int i = 0; i < BLADE_SEGMENTS; i++)
 		{
 			float t = i / (float)BLADE_SEGMENTS;
@@ -164,42 +184,20 @@ Shader "Custom/Grass"
 			float segmentForward = pow(t, _BladeCurve) * forward;
 			float3x3 transformMatrix = i == 0 ? transformationMatrixFacing : transformationMatrix;
 
-			triStream.Append(GenerateGrassVertex(pos, segmentWidth, segmentHeight, segmentForward, float2(0, t), transformMatrix));
-			triStream.Append(GenerateGrassVertex(pos, -segmentWidth, segmentHeight, segmentForward, float2(1, t), transformMatrix));
+			triStream.Append(GenerateGrassVertex(pos, posOffset, segmentWidth, segmentHeight, segmentForward, float2(0, t), transformMatrix));
+			triStream.Append(GenerateGrassVertex(pos, posOffset, -segmentWidth, segmentHeight, segmentForward, float2(1, t), transformMatrix));
 		}
-		triStream.Append(GenerateGrassVertex(pos, 0, height, forward, float2(0.5, 1), transformationMatrix));
-	}
-
-	// TODO - move this function...
-	geometryOutput VertexOutputShadow(vertexOutput IN)
-	{
-		// FIXME - should be able to just use this, right?...
-		return VertexOutput(IN.vertex, IN.uv, IN.normal);
-
-//		geometryOutput o;
-//		o.pos = UnityObjectToClipPos(IN.vertex);
-//		o.uv = IN.uv;
-//		o.normal = UnityObjectToWorldNormal(IN.normal);
-//		o._ShadowCoord = ComputeScreenPos(o.pos);
-//		#if UNITY_PASS_SHADOWCASTER
-//			// Applying the bias prevents artifacts from appearing on the surface.
-//			o.pos = UnityApplyLinearShadowBias(o.pos);
-//		#endif
-//		return o;
+		triStream.Append(GenerateGrassVertex(pos, posOffset, 0, height, forward, float2(0.5, 1), transformationMatrix));
 	}
 
 	[maxvertexcount(BLADE_SEGMENTS * 2 + 4)]
 	void geo_shadow(triangle vertexOutput IN[3], inout TriangleStream<geometryOutput> triStream)
 	{
-		triStream.Append(VertexOutputShadow(IN[0]));
-		triStream.Append(VertexOutputShadow(IN[1]));
-		triStream.Append(VertexOutputShadow(IN[2]));
+		triStream.Append(VertexObjectOutput(IN[0]));
+		triStream.Append(VertexObjectOutput(IN[1]));
+		triStream.Append(VertexObjectOutput(IN[2]));
 
 		geo(IN, triStream);
-
-//		triStream.Append(VertexOutput(IN[0].vertex, IN[0].uv, IN[0].normal));
-//		triStream.Append(VertexOutput(IN[1].vertex, IN[1].uv, IN[1].normal));
-//		triStream.Append(VertexOutput(IN[2].vertex, IN[2].uv, IN[2].normal));
 	}
 	ENDCG
 
@@ -241,8 +239,6 @@ Shader "Custom/Grass"
                 TRANSFER_SHADOW(o)
                 return o;
             }
-
-            sampler2D _Splat0;
 
             fixed4 frag0 (v2f i) : SV_Target
             {

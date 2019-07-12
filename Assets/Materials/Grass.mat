@@ -84,14 +84,16 @@ Material:
     - _Mode: 0
     - _OcclusionStrength: 1
     - _Parallax: 0.02
+    - _RandomBaseOffset: 1
     - _Rotation: 0
     - _RotationRandom: 0.174
     - _SmoothnessTextureChannel: 0
     - _SpecularHighlights: 1
     - _SrcBlend: 1
-    - _TessellationMaxDistance: 35.91
-    - _TessellationMinDistance: 5
-    - _TessellationUniform: 7.4
+    - _TessellationMaxDistance: 96.58
+    - _TessellationMinDistance: 22.4
+    - _TessellationNoise: 0
+    - _TessellationUniform: 3.1
     - _TranslucentGain: 0.5
     - _UVSec: 0
     - _WindScale: 1
