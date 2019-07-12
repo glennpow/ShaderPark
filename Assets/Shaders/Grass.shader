@@ -33,6 +33,7 @@ Shader "Custom/Grass"
 	CGINCLUDE
 	#include "UnityCG.cginc"
 	#include "Autolight.cginc"
+	#include "Lighting.cginc"  // FIXME- should this be in the Passes below?
 
 	// constants
 	#define BLADE_SEGMENTS 3
@@ -62,6 +63,7 @@ Shader "Custom/Grass"
 	struct vertexInput
 	{
 		float4 vertex : POSITION;
+		float2 texcoord : TEXCOORD0;
 		float3 normal : NORMAL;
 		float4 tangent : TANGENT;
 	};
@@ -69,6 +71,7 @@ Shader "Custom/Grass"
 	struct vertexOutput
 	{
 		float4 vertex : SV_POSITION;
+		float2 uv : TEXCOORD0;
 		float3 normal : NORMAL;
 		float4 tangent : TANGENT;
 	};
@@ -96,43 +99,25 @@ Shader "Custom/Grass"
 		return VertexOutput(localPosition, uv, localNormal);
 	}
 
-	// Simple noise function, sourced from http://answers.unity.com/answers/624136/view.html
-	// Extended discussion on this function can be found at the following link:
-	// https://forum.unity.com/threads/am-i-over-complicating-this-random-function.454887/#post-2949326
-	// Returns a number in the 0...1 range.
-	float rand(float3 co)
-	{
-		return frac(sin(dot(co.xyz, float3(12.9898, 78.233, 53.539))) * 43758.5453);
-	}
-
-	// Construct a rotation matrix that rotates around the provided axis, sourced from:
-	// https://gist.github.com/keijiro/ee439d5e7388f3aafc5296005c8c3f33
-	float3x3 AngleAxis3x3(float angle, float3 axis)
-	{
-		float c, s;
-		sincos(angle, s, c);
-
-		float t = 1 - c;
-		float x = axis.x;
-		float y = axis.y;
-		float z = axis.z;
-
-		return float3x3(
-			t * x * x + c, t * x * y - s * z, t * x * z + s * y,
-			t * x * y + s * z, t * y * y + c, t * y * z - s * x,
-			t * x * z - s * y, t * y * z + s * x, t * z * z + c
-			);
-	}
-
 	vertexOutput vert(vertexInput v)
 	{
 		vertexOutput o;
 		o.vertex = v.vertex;
+		o.uv = v.texcoord;
 		o.normal = v.normal;
 		o.tangent = v.tangent;
+
+//        half3 worldNormal = UnityObjectToWorldNormal(v.normal);
+//        half nl = max(0, dot(worldNormal, _WorldSpaceLightPos0.xyz));
+//        o.diff = nl * _LightColor0.rgb;
+//        o.ambient = ShadeSH9(half4(worldNormal,1));
+        // compute shadows data
+//        TRANSFER_SHADOW(o)
+
 		return o;
 	}
 
+	#include "Includes/Utilities.cginc"
 	#include "Includes/TessellationExtensions.cginc"
 
 	[maxvertexcount(BLADE_SEGMENTS * 2 + 1)]
@@ -184,12 +169,42 @@ Shader "Custom/Grass"
 		}
 		triStream.Append(GenerateGrassVertex(pos, 0, height, forward, float2(0.5, 1), transformationMatrix));
 	}
+
+	// TODO - move this function...
+	geometryOutput VertexOutputShadow(vertexOutput IN)
+	{
+		// FIXME - should be able to just use this, right?...
+		return VertexOutput(IN.vertex, IN.uv, IN.normal);
+
+//		geometryOutput o;
+//		o.pos = UnityObjectToClipPos(IN.vertex);
+//		o.uv = IN.uv;
+//		o.normal = UnityObjectToWorldNormal(IN.normal);
+//		o._ShadowCoord = ComputeScreenPos(o.pos);
+//		#if UNITY_PASS_SHADOWCASTER
+//			// Applying the bias prevents artifacts from appearing on the surface.
+//			o.pos = UnityApplyLinearShadowBias(o.pos);
+//		#endif
+//		return o;
+	}
+
+	[maxvertexcount(BLADE_SEGMENTS * 2 + 4)]
+	void geo_shadow(triangle vertexOutput IN[3], inout TriangleStream<geometryOutput> triStream)
+	{
+		triStream.Append(VertexOutputShadow(IN[0]));
+		triStream.Append(VertexOutputShadow(IN[1]));
+		triStream.Append(VertexOutputShadow(IN[2]));
+
+		geo(IN, triStream);
+
+//		triStream.Append(VertexOutput(IN[0].vertex, IN[0].uv, IN[0].normal));
+//		triStream.Append(VertexOutput(IN[1].vertex, IN[1].uv, IN[1].normal));
+//		triStream.Append(VertexOutput(IN[2].vertex, IN[2].uv, IN[2].normal));
+	}
 	ENDCG
 
     SubShader
     {
-		Cull Off
-
         Pass
         {
 			Tags
@@ -204,8 +219,6 @@ Shader "Custom/Grass"
 			#pragma target 3.0
 			#pragma multi_compile_fwdbase
 
-			#include "Lighting.cginc"
-
 			struct v2f
             {
                 float2 uv : TEXCOORD0;
@@ -214,6 +227,7 @@ Shader "Custom/Grass"
                 fixed3 ambient : COLOR1;
                 float4 pos : SV_POSITION;
             };
+
             v2f vert0 (appdata_base v)
             {
                 v2f o;
@@ -245,6 +259,8 @@ Shader "Custom/Grass"
 
         Pass
         {
+			Cull Off
+
 			Tags
 			{
 				"RenderType" = "Opaque"
@@ -261,8 +277,6 @@ Shader "Custom/Grass"
             #pragma fragment frag
 			#pragma target 4.6
 			#pragma multi_compile_fwdbase
-
-			#include "Lighting.cginc"
 
 			float4 _TopColor;
 			float4 _BottomColor;
@@ -285,6 +299,8 @@ Shader "Custom/Grass"
 
         Pass
 		{
+			Cull Off
+
 			Tags
 			{
 				"LightMode" = "ShadowCaster"
@@ -296,7 +312,7 @@ Shader "Custom/Grass"
 			#pragma vertex vert
 			#pragma hull hull
 			#pragma domain domain
-			#pragma geometry geo
+			#pragma geometry geo_shadow
 			#pragma fragment frag
 			#pragma target 4.6
 			#pragma multi_compile_shadowcaster
