@@ -2,10 +2,15 @@ Shader "Custom/Grass"
 {
     Properties
     {
+		[Header(Ground)]
+    	_Splat0 ("Ground Texture", 2D) = "white" {}
+
 		[Header(Shading)]
         _TopColor("Top Color", Color) = (1,1,1,1)
 		_BottomColor("Bottom Color", Color) = (1,1,1,1)
 		_TranslucentGain("Translucent Gain", Range(0,1)) = 0.5
+
+		[Header(Shape)]
 		_BladeWidth("Blade Width", Float) = 0.05
 		_BladeWidthRandom("Blade Width Random", Float) = 0.02
 		_BladeHeight("Blade Height", Float) = 0.5
@@ -13,7 +18,13 @@ Shader "Custom/Grass"
 		_BladeForward("Blade Forward Amount", Float) = 0.38
 		_BladeCurve("Blade Curvature Amount", Range(1, 4)) = 2
 		_BendRotationRandom("Bend Rotation Random", Range(0, 1)) = 0.2
+
+		[Header(Tessellation)]
 		_TessellationUniform("Tessellation Uniform", Range(1, 64)) = 1
+		_TessellationMinDistance ("Tessellation Min Distance", Float) = 10
+		_TessellationMaxDistance ("Tessellation Max Distance", Float) = 25
+
+		[Header(Wind)]
 		_WindDistortionMap("Wind Distortion Map", 2D) = "white" {}
 		_WindFrequency("Wind Frequency", Vector) = (0.05, 0.05, 0, 0)
 		_WindStrength("Wind Strength", Float) = 1
@@ -122,7 +133,7 @@ Shader "Custom/Grass"
 		return o;
 	}
 
-	#include "Shaders/CustomTessellation.cginc"
+	#include "Includes/TessellationExtensions.cginc"
 
 	[maxvertexcount(BLADE_SEGMENTS * 2 + 1)]
 	void geo(triangle vertexOutput IN[3], inout TriangleStream<geometryOutput> triStream)
@@ -188,6 +199,61 @@ Shader "Custom/Grass"
 			}
 
             CGPROGRAM
+            #pragma vertex vert0
+            #pragma fragment frag0
+			#pragma target 3.0
+			#pragma multi_compile_fwdbase
+
+			#include "Lighting.cginc"
+
+			struct v2f
+            {
+                float2 uv : TEXCOORD0;
+                SHADOW_COORDS(1) // put shadows data into TEXCOORD1
+                fixed3 diff : COLOR0;
+                fixed3 ambient : COLOR1;
+                float4 pos : SV_POSITION;
+            };
+            v2f vert0 (appdata_base v)
+            {
+                v2f o;
+                o.pos = UnityObjectToClipPos(v.vertex);
+                o.uv = v.texcoord;
+                half3 worldNormal = UnityObjectToWorldNormal(v.normal);
+                half nl = max(0, dot(worldNormal, _WorldSpaceLightPos0.xyz));
+                o.diff = nl * _LightColor0.rgb;
+                o.ambient = ShadeSH9(half4(worldNormal,1));
+                // compute shadows data
+                TRANSFER_SHADOW(o)
+                return o;
+            }
+
+            sampler2D _Splat0;
+
+            fixed4 frag0 (v2f i) : SV_Target
+            {
+                fixed4 col = tex2D(_Splat0, i.uv);
+                // compute shadow attenuation (1.0 = fully lit, 0.0 = fully shadowed)
+                fixed shadow = SHADOW_ATTENUATION(i);
+                // darken light's illumination with shadow, keep ambient intact
+                fixed3 lighting = i.diff * shadow + i.ambient;
+                col.rgb *= lighting;
+                return col;
+            }
+            ENDCG
+        }
+
+        Pass
+        {
+			Tags
+			{
+				"RenderType" = "Opaque"
+				"LightMode" = "ForwardBase"
+			}
+
+            CGPROGRAM
+            #pragma shader_feature _ TESSELLATION_DISTANCE_ON
+
             #pragma vertex vert
             #pragma hull hull
 			#pragma domain domain
@@ -225,6 +291,8 @@ Shader "Custom/Grass"
 			}
 
 			CGPROGRAM
+            #pragma shader_feature _ TESSELLATION_DISTANCE_ON
+
 			#pragma vertex vert
 			#pragma hull hull
 			#pragma domain domain

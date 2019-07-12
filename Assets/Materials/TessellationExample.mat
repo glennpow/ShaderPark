@@ -9,7 +9,7 @@ Material:
   m_PrefabAsset: {fileID: 0}
   m_Name: TessellationExample
   m_Shader: {fileID: 4800000, guid: 6f7bd658827be104caaefdbf76884e95, type: 3}
-  m_ShaderKeywords: 
+  m_ShaderKeywords: TESSELLATION_DISTANCE_ON
   m_LightmapFlags: 4
   m_EnableInstancingVariants: 0
   m_DoubleSidedGI: 0
@@ -70,7 +70,9 @@ Material:
     - _SmoothnessTextureChannel: 0
     - _SpecularHighlights: 1
     - _SrcBlend: 1
-    - _TessellationUniform: 2.6
+    - _TessellationMaxDistance: 20
+    - _TessellationMinDistance: 5
+    - _TessellationUniform: 7.4
     - _UVSec: 0
     - _ZWrite: 1
     m_Colors:

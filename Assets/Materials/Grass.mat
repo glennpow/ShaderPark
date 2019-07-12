@@ -9,7 +9,7 @@ Material:
   m_PrefabAsset: {fileID: 0}
   m_Name: Grass
   m_Shader: {fileID: 4800000, guid: 01eab4087a959ef4cbc34b8a3fba1e1f, type: 3}
-  m_ShaderKeywords: 
+  m_ShaderKeywords: TESSELLATION_DISTANCE_ON
   m_LightmapFlags: 4
   m_EnableInstancingVariants: 0
   m_DoubleSidedGI: 0
@@ -55,6 +55,10 @@ Material:
         m_Texture: {fileID: 0}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
+    - _Splat0:
+        m_Texture: {fileID: 0}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
     - _WindDistortionMap:
         m_Texture: {fileID: 2800000, guid: f28bba76fb944bc48be841e3ab6c411f, type: 3}
         m_Scale: {x: 0.01, y: 0.01}
@@ -85,6 +89,8 @@ Material:
     - _SmoothnessTextureChannel: 0
     - _SpecularHighlights: 1
     - _SrcBlend: 1
+    - _TessellationMaxDistance: 35.91
+    - _TessellationMinDistance: 5
     - _TessellationUniform: 7.4
     - _TranslucentGain: 0.5
     - _UVSec: 0

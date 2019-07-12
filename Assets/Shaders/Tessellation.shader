@@ -1,15 +1,19 @@
-Shader "Roystan/Tessellation Example"
+Shader "Custom/Tessellation"
 {
 	Properties
 	{
 		_Color("Color", Color) = (1,1,1,1)
 		_TessellationUniform ("Tessellation Uniform", Range(1, 64)) = 1
+		_TessellationMinDistance ("Tessellation Min Distance", Float) = 10
+		_TessellationMaxDistance ("Tessellation Max Distance", Float) = 25
 	}
 	SubShader
 	{
 		Pass
 		{
 			CGPROGRAM
+			#pragma shader_feature _ TESSELLATION_DISTANCE_ON
+
 			#pragma vertex vert
 			#pragma fragment frag
 			#pragma hull hull
@@ -37,7 +41,7 @@ Shader "Roystan/Tessellation Example"
 				return v;
 			}
 
-			#include "CustomTessellation.cginc"
+			#include "Includes/TessellationExtensions.cginc"
 
 			// Define custom vertex and domain shaders that transform the 
 			// outputted vertex to clip space; in the CustomTessellation file,

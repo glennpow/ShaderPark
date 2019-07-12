@@ -1,6 +1,6 @@
-// Tessellation programs based on this article by Catlike Coding:
-// https://catlikecoding.com/unity/tutorials/advanced-rendering/tessellation/
+#include "Tessellation.cginc"
 
+// These should be defined in the shader, and should include...
 //struct vertexInput
 //{
 //	float4 vertex : POSITION;
@@ -15,16 +15,17 @@
 //	float4 tangent : TANGENT;
 //};
 
+// Shader Property Accessors
+#if TESSELLATION_DISTANCE_ON
+	float _TessellationMinDistance = 10.0;
+	float _TessellationMaxDistance = 25.0;
+#endif
+
 struct TessellationFactors 
 {
 	float edge[3] : SV_TessFactor;
 	float inside : SV_InsideTessFactor;
 };
-
-//vertexInput vert(vertexInput v)
-//{
-//	return v;
-//}
 
 vertexOutput tessVert(vertexInput v)
 {
@@ -42,10 +43,20 @@ float _TessellationUniform;
 TessellationFactors patchConstantFunction (InputPatch<vertexInput, 3> patch)
 {
 	TessellationFactors f;
-	f.edge[0] = _TessellationUniform;
-	f.edge[1] = _TessellationUniform;
-	f.edge[2] = _TessellationUniform;
-	f.inside = _TessellationUniform;
+
+	#if TESSELLATION_DISTANCE_ON
+		float4 factors = UnityDistanceBasedTess(patch[0].vertex, patch[1].vertex, patch[2].vertex, _TessellationMinDistance, _TessellationMaxDistance, _TessellationUniform);
+		f.edge[0] = factors.x;
+		f.edge[1] = factors.y;
+		f.edge[2] = factors.z;
+		f.inside = factors.w;
+	#else
+		f.edge[0] = _TessellationUniform;
+		f.edge[1] = _TessellationUniform;
+		f.edge[2] = _TessellationUniform;
+		f.inside = _TessellationUniform;
+	#endif
+
 	return f;
 }
 
